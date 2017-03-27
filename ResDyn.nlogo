@@ -11,6 +11,17 @@ globals [
   ; winc
   
   ; sigma-initial-wealth-distrib
+  
+  ; indicators
+  #-disallowed-realized-moves
+  #-moves
+  
+  min-init-es-patch
+  max-init-es-patch
+  
+  reporter-patches
+  
+  headless?
 ]
 
 breed [households household]
@@ -25,27 +36,33 @@ patches-own [
   population
   neigh-wealth
   neigh-median-wealth
+  economic-status
   potential
   pstay
   pgain
+  
+  initial-economic-status
 ]
 
 
 to setup
-  ca
+  if headless? = 0 [ca]
   
   setup-globals
   setup-households
   update-patch-vars
   update-display
   
+  setup-indicators
+ 
+  
   reset-ticks
 end
 
 to setup-globals
   set total-time-steps 50
-  ;set #-households 45000
-  set #-households 9000
+  set #-households 45000
+  ;set #-households 9000
   ; number of neigh -> world size = patches
   
   set beta-stay 1000
@@ -62,6 +79,17 @@ to setup-households
   ]
 end
 
+to setup-indicators
+  ask patches [set initial-economic-status economic-status]
+  ;ask one-of patches with-min [initial-economic-status] [set min-init-es-patch self]
+  ;ask one-of patches with-max [initial-economic-status] [set max-init-es-patch self]
+  let thirdquart quantile [initial-economic-status] of patches 0.75
+  let firstquart quantile [initial-economic-status] of patches 0.25
+  set max-init-es-patch one-of patches with [initial-economic-status > thirdquart]
+  set min-init-es-patch one-of patches with [initial-economic-status < firstquart]
+  set reporter-patches to-list patches
+end
+
 
 to go
   
@@ -69,7 +97,7 @@ to go
   
   move-households
   
-  ; TODO also ORDER OF ACTIONS IS NOT CLEAR, ALSO IT SHOULD NOT HAVE AN INFLUENCE
+  ; also ORDER OF ACTIONS IS NOT CLEAR, ALSO IT SHOULD NOT HAVE AN INFLUENCE - no it's ok in the summary.
   update-households-wealth
   
   ; TODO : it is not clear in the paper WHEN are the patch variables updated, each time step or agent sampling ? makes a huge difference in implementation ! (maybe not behavior)
@@ -94,7 +122,8 @@ to move-households
       set pmove exp (beta-move * (wealth - [neigh-median-wealth] of potential-destination))
       if random-float 1 < pmove [
         move-to potential-destination setxy xcor - 0.5 + random-float 1 ycor - 0.5 + random-float 1
-        set moved? true
+        set moved? true set #-moves #-moves + 1
+        if wealth < [neigh-median-wealth] of potential-destination [set #-disallowed-realized-moves #-disallowed-realized-moves + 1 ]
       ]
     ] 
   ]
@@ -118,8 +147,9 @@ to update-patch-vars
     ifelse count households-here > 0 [set neigh-median-wealth median [wealth] of households-here][set neigh-median-wealth 0]
   ]
   let totwealth sum [neigh-wealth] of patches
+  let totweightedwealth sum [neigh-wealth / population] of patches with [count households-here > 0]
   ask patches [
-    
+    ifelse count households-here > 0 [set economic-status neigh-wealth / population][set economic-status 0]
     set potential neigh-wealth * count patches / totwealth
     set pstay exp (beta-stay * (potential - 1)) / (1 + exp (beta-stay * (potential - 1)))
     set pgain exp (beta-gain * (potential - 1)) / (1 + exp (beta-gain * (potential - 1)))
@@ -127,19 +157,99 @@ to update-patch-vars
 end 
 
 
+;;;
+;; indicators
+
+to-report segregation
+  ; sort patches on wealth
+  let wtot 0 let ptot 0 let total-wealth sum [neigh-wealth] of patches
+  foreach sort-by [[neigh-wealth] of ?1 > [neigh-wealth] of ?2] patches [
+    ask ? [set wtot wtot + neigh-wealth if wtot / total-wealth < 0.8 [set ptot ptot + population]]
+  ]
+  report ptot / sum [population] of patches
+end
+
+
+to-report disallowed-realized-ratio
+  ifelse #-moves > 0 [report  #-disallowed-realized-moves / #-moves][report 0]
+end
+
+; WONT WORK WITH OML BINDING
+;to-report patches-trajectories
+;  report [(list initial-economic-status economic-status)] of patches
+;end
+
+to-report initial-patches-es
+  let res [] foreach reporter-patches [ask ? [set res lput initial-economic-status res]] report res
+end
+
+to-report patches-es
+  let res [] foreach reporter-patches [ask ? [set res lput economic-status res]] report res
+end
+
+
 
 to update-display
-  let mi min [neigh-wealth] of patches let ma max [neigh-wealth] of patches
-  ask patches [set pcolor scale-color red neigh-wealth mi ma]
-  ask households [set size wealth * 0.1]
+  display-patches
+  display-households
 end
 
 
 to new-household
   set wealth exp (random-normal 0 sigma-initial-wealth-distrib)
-  set shape "person" set size wealth * 0.1
+  set shape "person" ;set size wealth * 0.1
   setxy xcor - 0.5 + random-float 1 ycor - 0.5 + random-float 1
 end
+
+
+
+to display-patches
+  let mi min [neigh-wealth] of patches let ma max [neigh-wealth] of patches
+  ask patches [set pcolor scale-color red neigh-wealth mi ma]
+end
+
+to display-households
+  let mi min [wealth] of households let ma max [wealth] of households
+  ask households [set size ((wealth - mi)/(ma - mi) + 1) * 0.1]
+end
+
+
+
+;;;;;;;;
+;; experiments
+
+to setup-experiment [lbmove incgrowth sigmaw seed]
+  set headless? true
+  
+  set log-beta-move lbmove
+  set winc incgrowth
+  set sigma-initial-wealth-distrib sigmaw
+  
+  random-seed seed
+  
+  setup
+  
+end
+
+to run-experiment
+  repeat total-time-steps [
+    go 
+  ]
+end
+
+
+
+to-report quantile [x q]
+  if length x = 0 [report 0]
+  report item (floor (q * length x)) (sort x)
+end
+
+
+to-report to-list [agentset]
+   let res [] ask patches [set res lput self res] report res
+end
+
+
 
 
 
@@ -249,6 +359,25 @@ sigma-initial-wealth-distrib
 1
 NIL
 HORIZONTAL
+
+PLOT
+1048
+42
+1397
+279
+trajs
+NIL
+NIL
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"min" 1.0 0 -10141563 true "" "plot [economic-status] of min-init-es-patch"
+"max" 1.0 0 -15637942 true "" "plot [economic-status] of max-init-es-patch"
 
 @#$#@#$#@
 ## WHAT IS IT?

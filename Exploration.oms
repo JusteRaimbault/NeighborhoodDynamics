@@ -1,0 +1,61 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+
+
+// Parameters
+val logBetaMove = Val[Double]
+val winc = Val[Double]
+val sigmaWealth = Val[Double]
+
+val id = Val[Int]
+val replication = Val[Int]
+
+// Indicators
+val segregation = Val[Double]
+val disallowedRatio = Val[Double]
+val initialEconomicStatus = Val[Array[Double]]
+val finalEconomicStatus = Val[Array[Double]]
+
+// model
+// setup-experiment [lbmove incgrowth sigmaw seed]
+val cmds = List("setup-experiment ${logBetaMove} ${winc} ${sigmaWealth} ${replication}","run-experiment")
+val model = NetLogo5Task(workDirectory / "HEADLESS_ResDyn.nlogo", cmds,embedWorkspace = true) set (
+    inputs += (logBetaMove,winc,sigmaWealth,replication,id),
+    outputs += (logBetaMove,winc,sigmaWealth,replication,id),
+    netLogoOutputs += ("segregation", segregation),
+    netLogoOutputs += ("disallowed-realized-ratio", disallowedRatio)//,
+    //netLogoOutputs += ("initial-patches-es", initialEconomicStatus),
+    //netLogoOutputs += ("patches-es", finalEconomicStatus)
+)
+
+
+// exploration
+val exploration = ExplorationTask (
+  /*(LHS(2,
+    logBetaMove in Range(-3.0,1.0),
+    winc in Range(0.0,7.5),
+    sigmaWealth in Range(0.1,0.5)
+  )*/
+  (((logBetaMove in (-3.0 to 6.0 by 0.1)) x
+    (winc in (0.0 to 10.0 by 1.0))x
+    //(winc is 5.0) x
+    (sigmaWealth in (0.1 to 1.0 by 0.1))
+ )
+   withIndex id) x
+ (replication in (UniformDistribution[Int]() take 100))
+)
+
+
+val purpose = "GRID"
+
+// output hook
+val indicshook = AppendToCSVFileHook(workDirectory / "exploration" / ((new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss")).format(new Date()))+"_"+purpose+".csv") set (
+  arraysOnSingleRow := true
+)
+
+// env
+//val local = LocalEnvironment(50)
+val grid = EGIEnvironment("vo.complex-systems.eu")
+
+//exploration -< (model on local hook indicshook)
+exploration -< (model on grid by 2000 hook indicshook)
