@@ -7,6 +7,9 @@ library(dplyr)
 library(ggplot2)
 library(reshape2)
 
+source(paste0(Sys.getenv('CS_HOME'),'/Organisation/Models/Utils/R/plots.R'))
+
+
 #res <- as.tbl(read.csv(file='exploration/2017_03_24_15_50_31_REPRO_EXPERIMENT.csv',skip = 1,header = FALSE,sep = ','))
 #names(res)<-c("disallowedRatio",paste0(1:225,"finalEconomicStatus"),"id",paste0(1:225,"initialEconomicStatus"),"logBetaMove","replication","segregation","sigmaWealth","winc")
 
@@ -80,9 +83,12 @@ g=ggplot(sres,aes(x=logBetaMove,y=segregation))
 g+geom_point()+geom_line()+facet_grid(sigmaWealth~winc)
 
 g=ggplot(sres,aes(x=logBetaMove,y=segregation,color=sigmaWealth,group=sigmaWealth))
-g+geom_line()+facet_wrap(~winc)
+g+geom_line()+facet_wrap(~winc)+stdtheme+ theme(legend.position=c(0.9, 0.1))
+ggsave(file='res/segreg-logbetamove_facet-sigma-winc.png',width=30,height=20,units='cm')
 
-
+g=ggplot(sres[sres$winc==3,],aes(x=logBetaMove,y=segregation,color=sigmaWealth,group=sigmaWealth))
+g+geom_line()+stdtheme+ theme(legend.position=c(0.9, 0.1))
+ggsave(file='res/segreg-logbetamove_facet-sigma_winc3.png',width=30,height=20,units='cm')
 
 
 
