@@ -87,8 +87,8 @@ g+geom_line()+facet_wrap(~winc)+stdtheme+ theme(legend.position=c(0.9, 0.1))
 ggsave(file='res/segreg-logbetamove_facet-sigma-winc.png',width=30,height=20,units='cm')
 
 g=ggplot(sres[sres$winc==3,],aes(x=logBetaMove,y=segregation,color=sigmaWealth,group=sigmaWealth))
-g+geom_line()+stdtheme+ theme(legend.position=c(0.9, 0.1))
-ggsave(file='res/segreg-logbetamove_facet-sigma_winc3.png',width=30,height=20,units='cm')
+g+geom_line()+stdtheme
+ggsave(file='res/segreg-logbetamove_facet-sigma_winc3.png',width=25,height=20,units='cm')
 
 
 
